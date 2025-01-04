@@ -51,10 +51,8 @@ public class ProyectoLibre extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        // Dibujar todas las imágenes en la lista
         for (BitmapWithProperties item : bitmapsWithProperties) {
             float halfSize = item.size / 2;
-            // Dibujar el Bitmap usando el centro y el tamaño
             canvas.drawBitmap(item.bitmap, item.centerX - halfSize, item.centerY - halfSize, paint);
         }
     }
@@ -131,11 +129,11 @@ public class ProyectoLibre extends View {
             }
 
             Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmapToAdd, (int) size, (int) size, false);
-            Log.d("TouchDebug", "Scaled Bitmap width: " + scaledBitmap.getWidth() + ", height: " + scaledBitmap.getHeight());
+            bitmapsWithProperties.add(new BitmapWithProperties(scaledBitmap, x, y, size)); // Usa scaledBitmap aquí
+            invalidate();            Log.d("TouchDebug", "Scaled Bitmap width: " + scaledBitmap.getWidth() + ", height: " + scaledBitmap.getHeight());
 
             Log.d("TouchDebug", "Touch position: x = " + x + ", y = " + y);
 
-            bitmapsWithProperties.add(new BitmapWithProperties(bitmapToAdd, x, y, size));
             invalidate();  // Redibujar la vista
             return true;
         }
@@ -179,21 +177,19 @@ public class ProyectoLibre extends View {
         float size;
         float centerX, centerY;
         float touchOffsetX, touchOffsetY;
-        float touchRadius;  // Radio de interacción para tocar la imagen
+        float touchRadius;
 
         BitmapWithProperties(Bitmap bitmap, float centerX, float centerY, float size) {
             this.bitmap = bitmap;
             this.centerX = centerX;
             this.centerY = centerY;
             this.size = size;
-            this.touchRadius = size * 1.5f;  // Hacemos que el radio de toque sea 1.5 veces el tamaño de la imagen
+            this.touchRadius = size;
         }
 
         boolean isTouched(float x, float y) {
-            // Verificamos si el toque está dentro del área expandida (radio de toque)
             float dx = x - centerX;
             float dy = y - centerY;
-            Log.d("TouchDebug", "Touch at: " + x + "," + y + " - Image center: " + centerX + "," + centerY + " - dx: " + dx + " dy: " + dy);
             return (dx * dx + dy * dy) <= (touchRadius * touchRadius);
         }
     }
