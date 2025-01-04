@@ -50,10 +50,10 @@ public class ProyectoLibre extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-
         for (BitmapWithProperties item : bitmapsWithProperties) {
-            float halfSize = item.size / 2;
-            canvas.drawBitmap(item.bitmap, item.centerX - halfSize, item.centerY - halfSize, paint);
+            float halfWidth = item.bitmap.getWidth() / 2;
+            float halfHeight = item.bitmap.getHeight() / 2;
+            canvas.drawBitmap(item.bitmap, item.centerX - halfWidth, item.centerY - halfHeight, paint);
         }
     }
 
@@ -63,7 +63,6 @@ public class ProyectoLibre extends View {
         scaleGestureDetector.onTouchEvent(event);
 
         if (event.getActionMasked() == MotionEvent.ACTION_MOVE && activeBitmap != null) {
-            // Mover la imagen activa con el dedo
             if (activeBitmap != null) {
                 float dx = event.getX() - activeBitmap.touchOffsetX;
                 float dy = event.getY() - activeBitmap.touchOffsetY;
@@ -71,7 +70,6 @@ public class ProyectoLibre extends View {
                 activeBitmap.centerX += dx;
                 activeBitmap.centerY += dy;
 
-                // Actualizar las coordenadas del punto de toque para el siguiente movimiento
                 activeBitmap.touchOffsetX = event.getX();
                 activeBitmap.touchOffsetY = event.getY();
 
@@ -90,15 +88,11 @@ public class ProyectoLibre extends View {
     private class GestureListener extends GestureDetector.SimpleOnGestureListener {
         @Override
         public boolean onDown(MotionEvent e) {
-            // Verificar si tocamos una imagen activa
             for (BitmapWithProperties item : bitmapsWithProperties) {
                 if (item.isTouched(e.getX(), e.getY())) {
-                    activeBitmap = item;  // Establecer la imagen activa
-
-                    // Guardar la posición inicial del toque para el movimiento
+                    activeBitmap = item;
                     activeBitmap.touchOffsetX = e.getX();
                     activeBitmap.touchOffsetY = e.getY();
-
                     return true;
                 }
             }
@@ -107,24 +101,18 @@ public class ProyectoLibre extends View {
 
         @Override
         public boolean onDoubleTap(MotionEvent e) {
-            // Doble toque para agregar una nueva imagen (puede ser 'tree' o 'bench')
             float x = e.getX();
             float y = e.getY();
-            float size = 500; // Tamaño predeterminado de la imagen
+            float size = 500;
 
-            // Agregar la imagen 'tree' o 'bench' según la posición del toque o alguna lógica específica
             Bitmap bitmapToAdd;
             if (x < getWidth() / 2 && y < getHeight() / 2) {
-                // Cuadrante superior izquierdo
                 bitmapToAdd = treeBitmap;
             } else if (x >= getWidth() / 2 && y < getHeight() / 2) {
-                // Cuadrante superior derecho
                 bitmapToAdd = benchBitmap;
             } else if (x < getWidth() / 2 && y >= getHeight() / 2) {
-                // Cuadrante inferior izquierdo
                 bitmapToAdd = riverBitmap;
             } else {
-                // Cuadrante inferior derecho
                 bitmapToAdd = rockBitmap;
             }
 
@@ -134,17 +122,16 @@ public class ProyectoLibre extends View {
 
             Log.d("TouchDebug", "Touch position: x = " + x + ", y = " + y);
 
-            invalidate();  // Redibujar la vista
+            invalidate();
             return true;
         }
 
         @Override
         public void onLongPress(MotionEvent e) {
-            // Pulsación larga para eliminar una imagen
             for (int i = bitmapsWithProperties.size() - 1; i >= 0; i--) {
                 if (bitmapsWithProperties.get(i).isTouched(e.getX(), e.getY())) {
-                    bitmapsWithProperties.remove(i);  // Eliminar la imagen tocada
-                    invalidate();  // Redibujar la vista
+                    bitmapsWithProperties.remove(i);
+                    invalidate();
                     break;
                 }
             }
@@ -154,25 +141,19 @@ public class ProyectoLibre extends View {
     private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
         @Override
         public boolean onScale(ScaleGestureDetector detector) {
-            // Escalar la imagen activa con el gesto de pellizcar
             if (activeBitmap != null) {
-
-                // Actualizamos el tamaño con el factor de escala
-                activeBitmap.size *= detector.getScaleFactor();
-
-                // Limitar el tamaño entre 50 y 300
+                float scaleFactor = detector.getScaleFactor();
+                activeBitmap.size *= scaleFactor;
                 activeBitmap.size = Math.max(50, Math.min(activeBitmap.size, 800));
-
-
-
+                activeBitmap.scaleBitmap(activeBitmap.size);
                 invalidate();  // Redibujar la vista
             }
             return true;
         }
     }
 
-    // Clase que encapsula un Bitmap con sus propiedades
     private static class BitmapWithProperties {
+        Bitmap originalBitmap;
         Bitmap bitmap;
         float size;
         float centerX, centerY;
@@ -180,11 +161,19 @@ public class ProyectoLibre extends View {
         float touchRadius;
 
         BitmapWithProperties(Bitmap bitmap, float centerX, float centerY, float size) {
+            this.originalBitmap = bitmap;
             this.bitmap = bitmap;
             this.centerX = centerX;
             this.centerY = centerY;
             this.size = size;
-            this.touchRadius = size;
+            this.touchRadius = size * 0.5f;
+        }
+
+        void scaleBitmap(float newSize) {
+            this.size = newSize;
+            int newWidth = (int) size;
+            int newHeight = (int) (originalBitmap.getHeight() * ((float) newWidth / originalBitmap.getWidth()));
+            this.bitmap = Bitmap.createScaledBitmap(originalBitmap, newWidth, newHeight, true);
         }
 
         boolean isTouched(float x, float y) {
