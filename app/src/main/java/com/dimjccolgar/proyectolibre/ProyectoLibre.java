@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.util.AttributeSet;
 import android.view.GestureDetector;
@@ -29,6 +30,10 @@ public class ProyectoLibre extends View {
     private Bitmap riverBitmap;  // Imagen del banco
     private Bitmap rockBitmap;  // Imagen del banco
 
+    // Variables para el AppMate tangible
+    private AppMateCircle activeCircle = null;
+    private final List<AppMateCircle> appMateCircles = new ArrayList<>();
+
 
     public ProyectoLibre(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -50,40 +55,127 @@ public class ProyectoLibre extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+
+        // Dibujar imágenes existentes
         for (BitmapWithProperties item : bitmapsWithProperties) {
             float halfWidth = item.bitmap.getWidth() / 2;
             float halfHeight = item.bitmap.getHeight() / 2;
             canvas.drawBitmap(item.bitmap, item.centerX - halfWidth, item.centerY - halfHeight, paint);
         }
+
+        // Dibujar vector del AppMate si está activo
+        paint.setColor(Color.YELLOW);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setStrokeWidth(8f);
+        for (AppMateCircle circle : appMateCircles) {
+            canvas.drawCircle(circle.centerX, circle.centerY, circle.radius, paint);
+        }
     }
+
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         gestureDetector.onTouchEvent(event);
         scaleGestureDetector.onTouchEvent(event);
 
+        // Manejar el movimiento de una imagen activa
         if (event.getActionMasked() == MotionEvent.ACTION_MOVE && activeBitmap != null) {
-            if (activeBitmap != null) {
-                float dx = event.getX() - activeBitmap.touchOffsetX;
-                float dy = event.getY() - activeBitmap.touchOffsetY;
+            float dx = event.getX() - activeBitmap.touchOffsetX;
+            float dy = event.getY() - activeBitmap.touchOffsetY;
 
-                activeBitmap.centerX += dx;
-                activeBitmap.centerY += dy;
+            activeBitmap.centerX += dx;
+            activeBitmap.centerY += dy;
 
-                activeBitmap.touchOffsetX = event.getX();
-                activeBitmap.touchOffsetY = event.getY();
+            activeBitmap.touchOffsetX = event.getX();
+            activeBitmap.touchOffsetY = event.getY();
 
-                invalidate();
+            invalidate();
+            return true;
+        }
+
+        // Finalizar el movimiento de la imagen activa
+        if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+            activeBitmap = null;
+            activeCircle = null; // También finalizamos el movimiento del círculo
+            return true;
+        }
+
+        // Manejar el movimiento del círculo
+        if (!appMateCircles.isEmpty()) {
+            AppMateCircle circle = appMateCircles.get(0); // Solo un círculo permitido
+
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    // Detectar si el toque inicial está dentro del círculo
+                    float dx = event.getX() - circle.centerX;
+                    float dy = event.getY() - circle.centerY;
+                    if (Math.sqrt(dx * dx + dy * dy) <= circle.radius) {
+                        activeCircle = circle; // Activar el círculo para moverlo
+                        return true;
+                    }
+                    break;
+
+                case MotionEvent.ACTION_MOVE:
+                    if (activeCircle != null) {
+                        // Mover el círculo al actualizar las coordenadas del centro
+                        activeCircle.centerX = event.getX();
+                        activeCircle.centerY = event.getY();
+                        invalidate(); // Redibujar
+                        return true;
+                    }
+                    break;
             }
         }
 
-        if (event.getActionMasked() == MotionEvent.ACTION_UP) {
-            // Finaliza el movimiento al soltar el dedo
-            activeBitmap = null;
+        // Limitar la creación a un solo círculo
+        if (appMateCircles.size() >= 1) {
+            return true; // No permitir más de un círculo
+        }
+
+        // Crear un círculo cuando se detectan tres contactos simultáneos
+        if (event.getPointerCount() == 3) {
+            float x1 = event.getX(0), y1 = event.getY(0);
+            float x2 = event.getX(1), y2 = event.getY(1);
+            float x3 = event.getX(2), y3 = event.getY(2);
+
+            // Calcular el círculo que engloba las tres posiciones
+            AppMateCircle circle = calcularCirculo(x1, y1, x2, y2, x3, y3);
+            if (circle != null) {
+                appMateCircles.clear(); // Limpiar cualquier círculo existente
+                appMateCircles.add(circle); // Añadir el nuevo círculo
+                invalidate(); // Redibujar
+            }
         }
 
         return true;
     }
+
+
+    private AppMateCircle calcularCirculo(float x1, float y1, float x2, float y2, float x3, float y3) {
+        // Calcular el centroide como aproximación al centro
+        float centerX = (x1 + x2 + x3) / 3;
+        float centerY = (y1 + y2 + y3) / 3;
+
+        // Calcular el radio como la distancia máxima del centro a los tres puntos
+        float r1 = (float) Math.hypot(centerX - x1, centerY - y1);
+        float r2 = (float) Math.hypot(centerX - x2, centerY - y2);
+        float r3 = (float) Math.hypot(centerX - x3, centerY - y3);
+
+        float radius = Math.max(r1, Math.max(r2, r3)); // Tomar el mayor como radio
+        return new AppMateCircle(centerX, centerY, radius);
+    }
+    private static class AppMateCircle{
+        float centerX, centerY;
+        float radius;
+
+        AppMateCircle(float centerX, float centerY, float radius) {
+            this.centerX = centerX;
+            this.centerY = centerY;
+            this.radius = radius;
+
+        }
+    }
+
 
     private class GestureListener extends GestureDetector.SimpleOnGestureListener {
         @Override
@@ -132,10 +224,30 @@ public class ProyectoLibre extends View {
                 if (bitmapsWithProperties.get(i).isTouched(e.getX(), e.getY())) {
                     bitmapsWithProperties.remove(i);
                     invalidate();
+                    return;
+                }
+            }
+
+            // Verificar si se toca un círculo y eliminarlo
+            float x = e.getX();
+            float y = e.getY();
+
+            AppMateCircle circleToRemove = null;
+            for (AppMateCircle circle : appMateCircles) {
+                float dx = x - circle.centerX;
+                float dy = y - circle.centerY;
+                if (Math.sqrt(dx * dx + dy * dy) <= circle.radius) { // Tolerancia: dentro del círculo
+                    circleToRemove = circle;
                     break;
                 }
             }
+
+            if (circleToRemove != null) {
+                appMateCircles.remove(circleToRemove);
+                invalidate();
+            }
         }
+
     }
 
     private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
