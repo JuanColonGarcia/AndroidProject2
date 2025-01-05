@@ -70,32 +70,30 @@ public class ProyectoLibre extends View {
             canvas.drawBitmap(item.bitmap, item.centerX - halfWidth, item.centerY - halfHeight, paint);
         }
 
-        // Si hay exactamente 4 puntos de contacto, calcula y dibuja el círculo
-        if (contactPoints.size() == 4) {
-            float[] point1 = null, point2 = null, point3 = null, point4 = null;
+        // Si hay exactamente 3 puntos de contacto, calcula y dibuja el círculo
+        if (contactPoints.size() == 3) {
+            float[] point1 = null, point2 = null, point3 = null;
 
             int index = 0;
             for (float[] point : contactPoints.values()) {
                 if (index == 0) point1 = point;
                 else if (index == 1) point2 = point;
                 else if (index == 2) point3 = point;
-                else if (index == 3) point4 = point;
 
                 index++;
             }
 
-            if (point1 != null && point2 != null && point3 != null && point4 != null) {
+            if (point1 != null && point2 != null && point3 != null) {
                 // Calcula el centro del círculo
-                float centerX = (point1[0] + point2[0] + point3[0] + point4[0]) / 4;
-                float centerY = (point1[1] + point2[1] + point3[1] + point4[1]) / 4;
+                float centerX = (point1[0] + point2[0] + point3[0]) / 3;
+                float centerY = (point1[1] + point2[1] + point3[1]) / 3;
 
                 // Calcula el radio como la distancia promedio al centro
                 float radius = (
                         (float) Math.sqrt(Math.pow(point1[0] - centerX, 2) + Math.pow(point1[1] - centerY, 2)) +
                                 (float) Math.sqrt(Math.pow(point2[0] - centerX, 2) + Math.pow(point2[1] - centerY, 2)) +
-                                (float) Math.sqrt(Math.pow(point3[0] - centerX, 2) + Math.pow(point3[1] - centerY, 2)) +
-                                (float) Math.sqrt(Math.pow(point4[0] - centerX, 2) + Math.pow(point4[1] - centerY, 2))
-                ) / 4;
+                                (float) Math.sqrt(Math.pow(point3[0] - centerX, 2) + Math.pow(point3[1] - centerY, 2))
+                ) / 3;
 
                 // Guarda las coordenadas del círculo para persistencia
                 savedCenterX = centerX;
@@ -130,7 +128,7 @@ public class ProyectoLibre extends View {
         switch (action) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN: {
-                if (contactPoints.size() < 4) {
+                if (contactPoints.size() < 3) {
                     float x = event.getX(pointerIndex);
                     float y = event.getY(pointerIndex);
                     contactPoints.put(pointerId, new float[]{x, y});
