@@ -31,12 +31,16 @@ public class ProyectoLibre extends View {
     private Bitmap riverBitmap;  // Imagen del río
     private Bitmap rockBitmap;  // Imagen de la roca
 
-    // Variables para almacenar el círculo persistente
+    // Variables para almacenar el círculo
     private Float savedCenterX = null;
     private Float savedCenterY = null;
     private Float savedRadius = null;
 
     private final Map<Integer, float[]> contactPoints = new HashMap<>();
+
+    private float lineStartX = -1, lineStartY = -1;
+    private float lineEndX = -1, lineEndY = -1;
+
 
     public ProyectoLibre(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -63,64 +67,51 @@ public class ProyectoLibre extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        // Dibujar imágenes existentes
+        // Dibujar las imágenes
         for (BitmapWithProperties item : bitmapsWithProperties) {
             float halfWidth = item.bitmap.getWidth() / 2;
             float halfHeight = item.bitmap.getHeight() / 2;
             canvas.drawBitmap(item.bitmap, item.centerX - halfWidth, item.centerY - halfHeight, paint);
         }
 
-        // Si hay exactamente 3 puntos de contacto, calcula y dibuja el círculo
-        if (contactPoints.size() == 3) {
-            float[] point1 = null, point2 = null, point3 = null;
+        // Dibujar el círculo con sombreado si ya fue calculado
+        if (savedCenterX != null && savedCenterY != null && savedRadius != null) {
+            // Definir el color de relleno y el sombreado (gradiente)
+            paint.setStyle(Paint.Style.FILL);
 
-            int index = 0;
-            for (float[] point : contactPoints.values()) {
-                if (index == 0) point1 = point;
-                else if (index == 1) point2 = point;
-                else if (index == 2) point3 = point;
+            // Crear un gradiente radial que simula el sombreado
+            int[] colors = {Color.YELLOW, Color.argb(0, 255, 255, 0)};  // Amarillo a transparente
+            float[] positions = {0.0f, 1.0f};  // De amarillo a transparente
 
-                index++;
-            }
+            // Asegúrate de usar primitivos 'float' y un valor adecuado para TileMode
+            android.graphics.RadialGradient gradient = new android.graphics.RadialGradient(
+                    savedCenterX, savedCenterY, savedRadius, colors, positions, android.graphics.Shader.TileMode.CLAMP);
 
-            if (point1 != null && point2 != null && point3 != null) {
-                // Calcula el centro del círculo
-                float centerX = (point1[0] + point2[0] + point3[0]) / 3;
-                float centerY = (point1[1] + point2[1] + point3[1]) / 3;
+            paint.setShader(gradient);
 
-                // Calcula el radio como la distancia promedio al centro
-                float radius = (
-                        (float) Math.sqrt(Math.pow(point1[0] - centerX, 2) + Math.pow(point1[1] - centerY, 2)) +
-                                (float) Math.sqrt(Math.pow(point2[0] - centerX, 2) + Math.pow(point2[1] - centerY, 2)) +
-                                (float) Math.sqrt(Math.pow(point3[0] - centerX, 2) + Math.pow(point3[1] - centerY, 2))
-                ) / 3;
+            // Dibujar el círculo con el sombreado aplicado
+            canvas.drawCircle(savedCenterX, savedCenterY, savedRadius, paint);
 
-                // Guarda las coordenadas del círculo para persistencia
-                savedCenterX = centerX;
-                savedCenterY = centerY;
-                savedRadius = radius;
-
-                // Dibuja el círculo con los valores calculados
-                paint.setColor(Color.YELLOW);
-                paint.setStyle(Paint.Style.FILL);
-                paint.setStrokeJoin(Paint.Join.ROUND);
-                canvas.drawCircle(centerX, centerY, radius, paint);
-            }
+            // Resetear el shader para evitar afectar otros dibujos
+            paint.setShader(null);
         }
 
-        // Si el círculo fue guardado previamente, redibuja el círculo persistente
-        if (savedCenterX != null && savedCenterY != null && savedRadius != null) {
-            paint.setColor(Color.YELLOW);
-            paint.setStyle(Paint.Style.FILL);
-            paint.setStrokeJoin(Paint.Join.ROUND);
-            canvas.drawCircle(savedCenterX, savedCenterY, savedRadius, paint);
+        // Dibujar la línea solo si hay dos dedos
+        if (lineStartX != -1 && lineStartY != -1 && lineEndX != -1 && lineEndY != -1) {
+            paint.setColor(Color.BLUE);  // Cambia el color según tu preferencia
+            paint.setStrokeWidth(6f);
+            paint.setStyle(Paint.Style.STROKE);
+            canvas.drawLine(lineStartX, lineStartY, lineEndX, lineEndY, paint);
         }
     }
+
+
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         gestureDetector.onTouchEvent(event);
         scaleGestureDetector.onTouchEvent(event);
+
         int action = event.getActionMasked();
         int pointerIndex = event.getActionIndex();
         int pointerId = event.getPointerId(pointerIndex);
@@ -146,16 +137,18 @@ public class ProyectoLibre extends View {
                 break;
             }
             case MotionEvent.ACTION_MOVE: {
-                // Mover solo la imagen activa
+                // Si hay una imagen activa, se mueve y se ignora la lógica de líneas/círculos
                 if (activeBitmap != null) {
                     float newX = event.getX(pointerIndex) - activeBitmap.touchOffsetX;
                     float newY = event.getY(pointerIndex) - activeBitmap.touchOffsetY;
 
                     activeBitmap.centerX = newX;
                     activeBitmap.centerY = newY;
+                    invalidate();
+                    return true;
                 }
 
-                // Actualizar las posiciones de los puntos de contacto
+                // Actualizar los puntos de contacto
                 for (int i = 0; i < event.getPointerCount(); i++) {
                     int id = event.getPointerId(i);
                     float[] point = contactPoints.get(id);
@@ -164,24 +157,77 @@ public class ProyectoLibre extends View {
                         point[1] = event.getY(i);
                     }
                 }
+
+                // Si hay tres puntos, actualiza el círculo
+                if (contactPoints.size() == 3) {
+                    List<float[]> points = new ArrayList<>(contactPoints.values());
+                    float[] point1 = points.get(0);
+                    float[] point2 = points.get(1);
+                    float[] point3 = points.get(2);
+
+                    float centerX = (point1[0] + point2[0] + point3[0]) / 3;
+                    float centerY = (point1[1] + point2[1] + point3[1]) / 3;
+
+                    float radius = (
+                            (float) Math.sqrt(Math.pow(point1[0] - centerX, 2) + Math.pow(point1[1] - centerY, 2)) +
+                                    (float) Math.sqrt(Math.pow(point2[0] - centerX, 2) + Math.pow(point2[1] - centerY, 2)) +
+                                    (float) Math.sqrt(Math.pow(point3[0] - centerX, 2) + Math.pow(point3[1] - centerY, 2))
+                    ) / 3;
+
+                    savedCenterX = centerX;
+                    savedCenterY = centerY;
+                    savedRadius = radius;
+
+                    // Resetea las coordenadas de la línea
+                    lineStartX = -1;
+                    lineStartY = -1;
+                    lineEndX = -1;
+                    lineEndY = -1;
+                }
+                // Si hay exactamente dos puntos, actualiza las coordenadas de la línea
+                else if (contactPoints.size() == 2) {
+                    List<float[]> points = new ArrayList<>(contactPoints.values());
+                    lineStartX = points.get(0)[0];
+                    lineStartY = points.get(0)[1];
+                    lineEndX = points.get(1)[0];
+                    lineEndY = points.get(1)[1];
+                }
+                // Si no hay dos o tres puntos, resetea la línea, pero el círculo permanece
+                else if (contactPoints.size() < 2) {
+                    lineStartX = -1;
+                    lineStartY = -1;
+                    lineEndX = -1;
+                    lineEndY = -1;
+                }
                 break;
             }
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_POINTER_UP: {
                 contactPoints.remove(pointerId);
 
-                // Desmarcar la imagen activa cuando se deja de tocar
+                // Resetear la imagen activa
                 if (activeBitmap != null) {
                     activeBitmap = null;
                 }
+
+                // Verificar si los puntos restantes son menos de 2
+                if (contactPoints.size() < 2) {
+                    // Reinicia la línea si ya no hay suficientes puntos para una línea
+                    lineStartX = -1;
+                    lineStartY = -1;
+                    lineEndX = -1;
+                    lineEndY = -1;
+                }
+
+                invalidate();
                 break;
             }
+
         }
 
-        invalidate();  // Redibuja la vista
+        invalidate();
         return true;
     }
-
 
     private class GestureListener extends GestureDetector.SimpleOnGestureListener {
         @Override
@@ -217,11 +263,6 @@ public class ProyectoLibre extends View {
             Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmapToAdd, (int) size, (int) size, false);
             bitmapsWithProperties.add(new BitmapWithProperties(scaledBitmap, x, y, size)); // Usa scaledBitmap aquí
             invalidate();
-            Log.d("TouchDebug", "Scaled Bitmap width: " + scaledBitmap.getWidth() + ", height: " + scaledBitmap.getHeight());
-
-            Log.d("TouchDebug", "Touch position: x = " + x + ", y = " + y);
-
-            invalidate();
             return true;
         }
 
@@ -245,7 +286,7 @@ public class ProyectoLibre extends View {
                 activeBitmap.size *= scaleFactor;
                 activeBitmap.size = Math.max(50, Math.min(activeBitmap.size, 800));
                 activeBitmap.scaleBitmap(activeBitmap.size);
-                invalidate();  // Redibujar la vista
+                invalidate();
             }
             return true;
         }
