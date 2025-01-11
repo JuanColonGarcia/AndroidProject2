@@ -6,12 +6,12 @@ import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.util.AttributeSet;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
-import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -22,90 +22,156 @@ public class ProyectoLibre extends View {
     private final GestureDetector gestureDetector;
     private final ScaleGestureDetector scaleGestureDetector;
 
-    private final List<BitmapWithProperties> bitmapsWithProperties = new ArrayList<>();  // Lista para almacenar las imágenes
-    private BitmapWithProperties activeBitmap = null;  // Imagen activa para moverla
+    private final List<BitmapWithProperties> bitmapsWithProperties = new ArrayList<>();
+    private BitmapWithProperties activeBitmap = null;
 
     private final Paint paint = new Paint();
-    private Bitmap treeBitmap;  // Imagen del árbol
-    private Bitmap benchBitmap;  // Imagen del banco
-    private Bitmap riverBitmap;  // Imagen del río
-    private Bitmap rockBitmap;  // Imagen de la roca
+    private Bitmap treeBitmap;
+    private Bitmap benchBitmap;
+    private Bitmap riverBitmap;
+    private Bitmap rockBitmap;
 
-    // Variables para almacenar el círculo
     private Float savedCenterX = null;
     private Float savedCenterY = null;
     private Float savedRadius = null;
-
     private final Map<Integer, float[]> contactPoints = new HashMap<>();
 
-    private float lineStartX = -1, lineStartY = -1;
-    private float lineEndX = -1, lineEndY = -1;
+    private boolean isCircleRotating = false;
+    private boolean isTriangleRotating = false;
+    private float initialRotationAngleCircle = 0;
+    private float initialRotationAngleTriangle = 0;
+    private float rotationAngleCircle = 0;
+    private float rotationAngleTriangle = 0;
 
+    private boolean isTriangleFixed = false;
+    private float fixedTriangleX, fixedTriangleY, fixedTriangleSize;
+
+    private final Paint brownPaint = new Paint();
+    private final Paint greenPaint = new Paint();
 
     public ProyectoLibre(Context context, AttributeSet attrs) {
         super(context, attrs);
 
-        // Inicialización de los detectores
         GestureListener gestureListener = new GestureListener();
         gestureDetector = new GestureDetector(context, gestureListener);
         scaleGestureDetector = new ScaleGestureDetector(context, new ScaleListener());
-        paint.setAntiAlias(true);
 
-        // Cargar las imágenes
-        treeBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.tree);  // Imagen 'tree'
-        benchBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.bench);  // Imagen 'bench'
-        riverBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.river);  // Imagen 'river'
-        rockBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.rock);  // Imagen 'rock'
+        treeBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.tree);
+        benchBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.bench);
+        riverBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.river);
+        rockBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.rock);
 
         paint.setAntiAlias(true);
         paint.setStrokeWidth(6f);
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(Color.YELLOW);
+
+        brownPaint.setColor(Color.rgb(139, 69, 19));
+        brownPaint.setStyle(Paint.Style.FILL);
+        brownPaint.setAntiAlias(true);
+
+        greenPaint.setColor(Color.GREEN);
+        greenPaint.setStyle(Paint.Style.FILL);
+        greenPaint.setAntiAlias(true);
+    }
+
+    private void drawMountain(Canvas canvas, float baseX, float baseY, float size) {
+        float halfBase = size * 0.5f;
+
+        float tipX = baseX;
+        float tipY = baseY - size;
+
+        float leftBaseX = baseX - halfBase;
+        float leftBaseY = baseY;
+
+        float rightBaseX = baseX + halfBase;
+        float rightBaseY = baseY;
+
+        Path path = new Path();
+        path.moveTo(tipX, tipY);
+        path.lineTo(leftBaseX, leftBaseY);
+        path.lineTo(rightBaseX, rightBaseY);
+        path.close();
+
+        canvas.drawPath(path, brownPaint);
+
+        float smallTipX = baseX;
+        float smallTipY = tipY;
+
+        float clipLeftX = baseX - halfBase;
+
+        float clipRightX = baseX + halfBase;
+        float clipRightY = tipY + size * (1.0f / 3.0f);
+
+        Path smallPath = new Path();
+        smallPath.moveTo(smallTipX, smallTipY);
+        smallPath.lineTo(leftBaseX, leftBaseY);
+        smallPath.lineTo(rightBaseX, rightBaseY);
+        smallPath.close();
+
+        canvas.save();
+        canvas.clipRect(clipLeftX, tipY, clipRightX, clipRightY);
+        canvas.drawPath(smallPath, greenPaint);
+        canvas.restore();
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        // Dibujar las imágenes
         for (BitmapWithProperties item : bitmapsWithProperties) {
             float halfWidth = item.bitmap.getWidth() / 2;
             float halfHeight = item.bitmap.getHeight() / 2;
             canvas.drawBitmap(item.bitmap, item.centerX - halfWidth, item.centerY - halfHeight, paint);
         }
 
-        // Dibujar el círculo con sombreado si ya fue calculado
         if (savedCenterX != null && savedCenterY != null && savedRadius != null) {
-            // Definir el color de relleno y el sombreado (gradiente)
+            canvas.save();
+            canvas.translate(savedCenterX, savedCenterY);
+            canvas.rotate(rotationAngleCircle);
+            canvas.translate(-savedCenterX, -savedCenterY);
+
             paint.setStyle(Paint.Style.FILL);
-
-            // Crear un gradiente radial que simula el sombreado
-            int[] colors = {Color.YELLOW, Color.argb(0, 255, 255, 0)};  // Amarillo a transparente
-            float[] positions = {0.0f, 1.0f};  // De amarillo a transparente
-
-            // Asegúrate de usar primitivos 'float' y un valor adecuado para TileMode
+            int[] colors = {Color.YELLOW, Color.argb(0, 255, 255, 0)};
+            float[] positions = {0.0f, 1.0f};
             android.graphics.RadialGradient gradient = new android.graphics.RadialGradient(
                     savedCenterX, savedCenterY, savedRadius, colors, positions, android.graphics.Shader.TileMode.CLAMP);
-
             paint.setShader(gradient);
-
-            // Dibujar el círculo con el sombreado aplicado
             canvas.drawCircle(savedCenterX, savedCenterY, savedRadius, paint);
-
-            // Resetear el shader para evitar afectar otros dibujos
             paint.setShader(null);
+
+            canvas.restore();
         }
 
-        // Dibujar la línea solo si hay dos dedos
-        if (lineStartX != -1 && lineStartY != -1 && lineEndX != -1 && lineEndY != -1) {
-            paint.setColor(Color.BLUE);  // Cambia el color según tu preferencia
-            paint.setStrokeWidth(6f);
-            paint.setStyle(Paint.Style.STROKE);
-            canvas.drawLine(lineStartX, lineStartY, lineEndX, lineEndY, paint);
+        if (isTriangleFixed) {
+            canvas.save();
+            canvas.translate(fixedTriangleX, fixedTriangleY);
+            canvas.rotate(rotationAngleTriangle);
+            canvas.translate(-fixedTriangleX, -fixedTriangleY);
+
+            drawMountain(canvas, fixedTriangleX, fixedTriangleY, fixedTriangleSize);
+
+            canvas.restore();
+        } else if (contactPoints.size() >= 4) {
+            List<float[]> points = new ArrayList<>(contactPoints.values());
+            float[] point1 = points.get(0);
+            float[] point2 = points.get(1);
+
+            float baseX = (point1[0] + point2[0]) / 2;
+            float baseY = (point1[1] + point2[1]) / 2;
+
+            float size = (float) Math.sqrt(Math.pow(point2[0] - point1[0], 2) + Math.pow(point2[1] - point1[1], 2));
+
+            canvas.save();
+            canvas.translate(baseX, baseY);
+            canvas.rotate(rotationAngleTriangle);
+            canvas.translate(-baseX, -baseY);
+
+            drawMountain(canvas, baseX, baseY, size);
+
+            canvas.restore();
         }
     }
-
-
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
@@ -119,16 +185,15 @@ public class ProyectoLibre extends View {
         switch (action) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN: {
-                if (contactPoints.size() < 3) {
+                if (contactPoints.size() < 5) {
                     float x = event.getX(pointerIndex);
                     float y = event.getY(pointerIndex);
                     contactPoints.put(pointerId, new float[]{x, y});
                 }
 
-                // Detectar si una imagen activa está siendo tocada
                 for (BitmapWithProperties item : bitmapsWithProperties) {
                     if (item.isTouched(event.getX(), event.getY())) {
-                        activeBitmap = item;  // Solo se marca como activa la imagen tocada
+                        activeBitmap = item;
                         activeBitmap.touchOffsetX = event.getX() - item.centerX;
                         activeBitmap.touchOffsetY = event.getY() - item.centerY;
                         return true;
@@ -137,7 +202,6 @@ public class ProyectoLibre extends View {
                 break;
             }
             case MotionEvent.ACTION_MOVE: {
-                // Si hay una imagen activa, se mueve y se ignora la lógica de líneas/círculos
                 if (activeBitmap != null) {
                     float newX = event.getX(pointerIndex) - activeBitmap.touchOffsetX;
                     float newY = event.getY(pointerIndex) - activeBitmap.touchOffsetY;
@@ -148,7 +212,6 @@ public class ProyectoLibre extends View {
                     return true;
                 }
 
-                // Actualizar los puntos de contacto
                 for (int i = 0; i < event.getPointerCount(); i++) {
                     int id = event.getPointerId(i);
                     float[] point = contactPoints.get(id);
@@ -158,8 +221,31 @@ public class ProyectoLibre extends View {
                     }
                 }
 
-                // Si hay tres puntos, actualiza el círculo
-                if (contactPoints.size() == 3) {
+                if (contactPoints.size() >= 4) {
+                    List<float[]> points = new ArrayList<>(contactPoints.values());
+                    float[] point1 = points.get(0);
+                    float[] point2 = points.get(1);
+                    float[] point3 = points.get(2);
+                    float[] point4 = points.get(3);
+
+                    float centerX = (point1[0] + point2[0] + point3[0] + point4[0]) / 4;
+                    float centerY = (point1[1] + point2[1] + point3[1] + point4[1]) / 4;
+
+                    if (!isTriangleRotating) {
+                        initialRotationAngleTriangle = calculateAngle(point1[0], point1[1], centerX, centerY);
+                        isTriangleRotating = true;
+                    }
+
+                    float currentAngle = calculateAngle(point1[0], point1[1], centerX, centerY);
+                    rotationAngleTriangle += currentAngle - initialRotationAngleTriangle;
+                    initialRotationAngleTriangle = currentAngle;
+
+                    fixedTriangleX = centerX;
+                    fixedTriangleY = centerY;
+                    fixedTriangleSize = (float) Math.sqrt(Math.pow(point2[0] - point1[0], 2) + Math.pow(point2[1] - point1[1], 2));
+
+                    invalidate();
+                } else if (contactPoints.size() == 3) {
                     List<float[]> points = new ArrayList<>(contactPoints.values());
                     float[] point1 = points.get(0);
                     float[] point2 = points.get(1);
@@ -178,26 +264,14 @@ public class ProyectoLibre extends View {
                     savedCenterY = centerY;
                     savedRadius = radius;
 
-                    // Resetea las coordenadas de la línea
-                    lineStartX = -1;
-                    lineStartY = -1;
-                    lineEndX = -1;
-                    lineEndY = -1;
-                }
-                // Si hay exactamente dos puntos, actualiza las coordenadas de la línea
-                else if (contactPoints.size() == 2) {
-                    List<float[]> points = new ArrayList<>(contactPoints.values());
-                    lineStartX = points.get(0)[0];
-                    lineStartY = points.get(0)[1];
-                    lineEndX = points.get(1)[0];
-                    lineEndY = points.get(1)[1];
-                }
-                // Si no hay dos o tres puntos, resetea la línea, pero el círculo permanece
-                else if (contactPoints.size() < 2) {
-                    lineStartX = -1;
-                    lineStartY = -1;
-                    lineEndX = -1;
-                    lineEndY = -1;
+                    if (!isCircleRotating) {
+                        initialRotationAngleCircle = calculateAngle(point1[0], point1[1], centerX, centerY);
+                        isCircleRotating = true;
+                    }
+
+                    float currentAngle = calculateAngle(point1[0], point1[1], centerX, centerY);
+                    rotationAngleCircle += currentAngle - initialRotationAngleCircle;
+                    initialRotationAngleCircle = currentAngle;
                 }
                 break;
             }
@@ -205,28 +279,35 @@ public class ProyectoLibre extends View {
             case MotionEvent.ACTION_POINTER_UP: {
                 contactPoints.remove(pointerId);
 
-                // Resetear la imagen activa
                 if (activeBitmap != null) {
                     activeBitmap = null;
                 }
 
-                // Verificar si los puntos restantes son menos de 2
-                if (contactPoints.size() < 2) {
-                    // Reinicia la línea si ya no hay suficientes puntos para una línea
-                    lineStartX = -1;
-                    lineStartY = -1;
-                    lineEndX = -1;
-                    lineEndY = -1;
+                if (contactPoints.size() >= 4) {
+                    isTriangleFixed = true;
+                    List<float[]> points = new ArrayList<>(contactPoints.values());
+                    float[] point1 = points.get(0);
+                    float[] point2 = points.get(1);
+
+                    fixedTriangleX = (point1[0] + point2[0]) / 2;
+                    fixedTriangleY = (point1[1] + point2[1]) / 2;
+                    fixedTriangleSize = (float) Math.sqrt(Math.pow(point2[0] - point1[0], 2) + Math.pow(point2[1] - point1[1], 2));
                 }
+
+                isCircleRotating = false;
+                isTriangleRotating = false;
+                isTriangleFixed = true;
 
                 invalidate();
                 break;
             }
-
         }
 
         invalidate();
         return true;
+    }
+    private float calculateAngle(float x1, float y1, float x2, float y2) {
+        return (float) Math.toDegrees(Math.atan2(y2 - y1, x2 - x1));
     }
 
     private class GestureListener extends GestureDetector.SimpleOnGestureListener {
@@ -261,7 +342,7 @@ public class ProyectoLibre extends View {
             }
 
             Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmapToAdd, (int) size, (int) size, false);
-            bitmapsWithProperties.add(new BitmapWithProperties(scaledBitmap, x, y, size)); // Usa scaledBitmap aquí
+            bitmapsWithProperties.add(new BitmapWithProperties(scaledBitmap, x, y, size));
             invalidate();
             return true;
         }
