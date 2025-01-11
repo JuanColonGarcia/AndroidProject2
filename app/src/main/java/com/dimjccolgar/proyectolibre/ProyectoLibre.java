@@ -55,24 +55,22 @@ public class ProyectoLibre extends View {
         GestureListener gestureListener = new GestureListener();
         gestureDetector = new GestureDetector(context, gestureListener);
         scaleGestureDetector = new ScaleGestureDetector(context, new ScaleListener());
+        paint.setAntiAlias(true);
 
         treeBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.tree);
         benchBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.bench);
         riverBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.river);
         rockBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.rock);
 
-        paint.setAntiAlias(true);
         paint.setStrokeWidth(6f);
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(Color.YELLOW);
 
         brownPaint.setColor(Color.rgb(139, 69, 19));
         brownPaint.setStyle(Paint.Style.FILL);
-        brownPaint.setAntiAlias(true);
 
         greenPaint.setColor(Color.GREEN);
         greenPaint.setStyle(Paint.Style.FILL);
-        greenPaint.setAntiAlias(true);
     }
 
     private void drawMountain(Canvas canvas, float baseX, float baseY, float size) {
@@ -119,12 +117,14 @@ public class ProyectoLibre extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
+        // Dibuja todos los elementos con las imágenes
         for (BitmapWithProperties item : bitmapsWithProperties) {
             float halfWidth = item.bitmap.getWidth() / 2;
             float halfHeight = item.bitmap.getHeight() / 2;
             canvas.drawBitmap(item.bitmap, item.centerX - halfWidth, item.centerY - halfHeight, paint);
         }
 
+        // Dibuja el sol
         if (savedCenterX != null && savedCenterY != null && savedRadius != null) {
             canvas.save();
             canvas.translate(savedCenterX, savedCenterY);
@@ -143,6 +143,7 @@ public class ProyectoLibre extends View {
             canvas.restore();
         }
 
+        // Dibuja el triángulo
         if (isTriangleFixed) {
             canvas.save();
             canvas.translate(fixedTriangleX, fixedTriangleY);
@@ -211,7 +212,7 @@ public class ProyectoLibre extends View {
                     invalidate();
                     return true;
                 }
-
+                // Actualiza las posiciones de los puntos de contacto
                 for (int i = 0; i < event.getPointerCount(); i++) {
                     int id = event.getPointerId(i);
                     float[] point = contactPoints.get(id);
@@ -230,7 +231,7 @@ public class ProyectoLibre extends View {
 
                     float centerX = (point1[0] + point2[0] + point3[0] + point4[0]) / 4;
                     float centerY = (point1[1] + point2[1] + point3[1] + point4[1]) / 4;
-
+                    // Calcula el ángulo de rotación del triángulo
                     if (!isTriangleRotating) {
                         initialRotationAngleTriangle = calculateAngle(point1[0], point1[1], centerX, centerY);
                         isTriangleRotating = true;
@@ -277,12 +278,13 @@ public class ProyectoLibre extends View {
             }
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_POINTER_UP: {
+                // Elimina los puntos de contacto cuando el dedo se levanta
                 contactPoints.remove(pointerId);
 
                 if (activeBitmap != null) {
                     activeBitmap = null;
                 }
-
+                // Fija el triángulo
                 if (contactPoints.size() >= 4) {
                     isTriangleFixed = true;
                     List<float[]> points = new ArrayList<>(contactPoints.values());
@@ -331,6 +333,7 @@ public class ProyectoLibre extends View {
             float size = 500;
 
             Bitmap bitmapToAdd;
+            // Lógica para determinar qué imagen añadir
             if (x < getWidth() / 2 && y < getHeight() / 2) {
                 bitmapToAdd = treeBitmap;
             } else if (x >= getWidth() / 2 && y < getHeight() / 2) {
@@ -349,6 +352,7 @@ public class ProyectoLibre extends View {
 
         @Override
         public void onLongPress(MotionEvent e) {
+            // Elimina la imagen si se mantiene presionada
             for (int i = bitmapsWithProperties.size() - 1; i >= 0; i--) {
                 if (bitmapsWithProperties.get(i).isTouched(e.getX(), e.getY())) {
                     bitmapsWithProperties.remove(i);
